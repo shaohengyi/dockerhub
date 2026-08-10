@@ -87,7 +87,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     openjdk-8-jdk \
     python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-distutils \
+    python3-distutils \
     git \
     curl \
     vim \

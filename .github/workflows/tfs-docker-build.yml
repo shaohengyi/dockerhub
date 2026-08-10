@@ -1,0 +1,41 @@
+name: Build and Push TFS Docker Image
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'tfs.docker/**'
+      - '.github/workflows/tfs-docker-build.yml'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push TFS GPU image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./tfs.docker
+          file: ./tfs.docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tensorflow-serving:2.18.0-gpu
+            ghcr.io/${{ github.repository_owner }}/tensorflow-serving:latest-gpu
+            ghcr.io/${{ github.repository_owner }}/tensorflow-serving:${{ github.sha }}

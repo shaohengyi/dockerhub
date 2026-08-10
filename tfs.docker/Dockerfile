@@ -21,18 +21,30 @@ ENV M2_HOME=/opt/maven
 ENV PATH=$M2_HOME/bin:$JAVA_HOME/bin:$PATH
 ENV HADOOP_SRC_HOME=/usr/src/hadoop-${HADOOP_VERSION}-src
 
+# 安装 Hadoop 编译依赖
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    wget tar gzip \
-    openjdk-8-jdk \
-    build-essential autoconf automake libtool cmake \
-    fuse libfuse-dev \
-    zlib1g-dev libssl-dev && \
+        wget \
+        tar \
+        gzip \
+        openjdk-8-jdk \
+        build-essential \
+        autoconf \
+        automake \
+        libtool \
+        cmake \
+        fuse \
+        libfuse-dev \
+        zlib1g-dev \
+        libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
-RUN ln -s $JAVA_HOME/jre/lib/amd64/server/libjvm.so \
+# 帮助 CMake 找到 Java VM library
+RUN ln -s \
+    $JAVA_HOME/jre/lib/amd64/server/libjvm.so \
     $JAVA_HOME/jre/lib/amd64/libjvm.so
 
+# 安装 protobuf 2.5.0
 RUN cd /tmp && \
     wget -q ${PROTOBUF_URL} && \
     tar -xzvf protobuf-${PROTOBUF_VERSION}.tar.gz && \
@@ -45,21 +57,24 @@ RUN cd /tmp && \
     rm -rf /tmp/* && \
     protoc --version
 
+# 安装 Maven
 RUN wget -q ${MAVEN_URL} -P /tmp && \
     tar -xzvf /tmp/apache-maven-${MAVEN_VERSION}-bin.tar.gz -C /opt && \
     ln -s /opt/apache-maven-${MAVEN_VERSION} ${M2_HOME} && \
     rm -f /tmp/apache-maven-${MAVEN_VERSION}-bin.tar.gz
 
+# 下载 Hadoop 2.7.1 源码
 RUN mkdir -p ${HADOOP_SRC_HOME} && \
     wget -q ${HADOOP_URL} -P ${HADOOP_SRC_HOME} && \
     tar -xzvf \
-    ${HADOOP_SRC_HOME}/hadoop-${HADOOP_VERSION}-src.tar.gz \
-    -C ${HADOOP_SRC_HOME} \
-    --strip-components=1 && \
+        ${HADOOP_SRC_HOME}/hadoop-${HADOOP_VERSION}-src.tar.gz \
+        -C ${HADOOP_SRC_HOME} \
+        --strip-components=1 && \
     rm -f ${HADOOP_SRC_HOME}/hadoop-${HADOOP_VERSION}-src.tar.gz
 
 WORKDIR ${HADOOP_SRC_HOME}
 
+# 编译 Hadoop native library
 RUN mvn package -Pdist,native -DskipTests -Dtar
 
 
@@ -80,28 +95,34 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 USER root
 
+# 安装 Java 8、Python 3.10 和基础工具
 RUN apt-get update && \
     apt-get install -y --no-install-recommends software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-    openjdk-8-jdk \
-    python${PYTHON_VERSION} \
-    python3-distutils \
-    git \
-    curl \
-    vim \
-    fuse \
-    libssl1.1 \
-    libssl-dev \
-    zlib1g-dev && \
-    update-alternatives --install \
-    /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 && \
-    update-alternatives --install \
-    /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
+        openjdk-8-jdk \
+        python${PYTHON_VERSION} \
+        python3-distutils \
+        git \
+        curl \
+        vim \
+        fuse \
+        libssl1.1 \
+        libssl-dev \
+        zlib1g-dev && \
+    update-alternatives \
+        --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 && \
+    update-alternatives \
+        --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
     curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+
+# ============================================================
+# Python environment
+# ============================================================
 
 WORKDIR /serving
 
@@ -118,7 +139,13 @@ RUN pip install --no-cache-dir \
 
 COPY setup.py test.py build_config_api.sh /serving/
 
-RUN chmod +x build_config_api.sh && ./build_config_api.sh
+RUN chmod +x build_config_api.sh && \
+    ./build_config_api.sh
+
+
+# ============================================================
+# Copy Hadoop and libraries from builder
+# ============================================================
 
 RUN mkdir -p /opt/hadoop-libs
 
@@ -134,6 +161,11 @@ COPY --from=builder \
     /usr/src/hadoop-2.7.1-src/hadoop-dist/target/hadoop-2.7.1 \
     /opt/hadoop
 
+
+# ============================================================
+# Hadoop runtime
+# ============================================================
+
 ENV HADOOP_HOME=/opt/hadoop
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
@@ -141,9 +173,14 @@ ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 ENV LD_LIBRARY_PATH=/opt/hadoop-libs:$HADOOP_HOME/lib/native
 
 RUN echo "export JAVA_HOME=${JAVA_HOME}" \
-    >> ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh && \
+        >> ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh && \
     ln -s \
-    ${HADOOP_HOME}/lib/native/libhdfs.so.0.0.0 \
-    /usr/lib/libhdfs.so
+        ${HADOOP_HOME}/lib/native/libhdfs.so.0.0.0 \
+        /usr/lib/libhdfs.so
+
+
+# ============================================================
+# TensorFlow Serving
+# ============================================================
 
 EXPOSE 8500 8501

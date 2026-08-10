@@ -1,6 +1,7 @@
-# 基础镜像：使用 TensorFlow Serving 2.18.0
+# 基础镜像：使用 TensorFlow Serving 2.18.0 gpu
 # 这个镜像是基于 Ubuntu 20.04 的
-FROM tensorflow/serving:2.18.0
+# FROM tensorflow/serving:2.18.0
+FROM tensorflow/serving:2.18.0-gpu
 
 # 作者信息（可选）
 LABEL maintainer="Your Name <your.email@example.com>"

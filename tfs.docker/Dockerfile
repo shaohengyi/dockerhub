@@ -39,7 +39,7 @@ RUN apt-get update && \
         libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# 帮助 CMake 找到 Java VM library
+# 帮助 CMake 找到 JVM library
 RUN ln -s \
     $JAVA_HOME/jre/lib/amd64/server/libjvm.so \
     $JAVA_HOME/jre/lib/amd64/libjvm.so
@@ -74,18 +74,18 @@ RUN mkdir -p ${HADOOP_SRC_HOME} && \
 
 WORKDIR ${HADOOP_SRC_HOME}
 
-# 编译 Hadoop native library
+# 编译 Hadoop 和 native library
 RUN mvn package -Pdist,native -DskipTests -Dtar
 
 
 # ============================================================
-# Stage 2: TensorFlow Serving 2.18.0 GPU
+# Stage 2: TensorFlow Serving 2.18.0 GPU Runtime
 # ============================================================
 
 FROM tensorflow/serving:2.18.0-gpu
 
 ARG HADOOP_VERSION=2.7.1
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.10.12
 
 ENV DEBIAN_FRONTEND=noninteractive \
     JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
@@ -95,36 +95,64 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 USER root
 
-# 安装 Java 8、Python 3.10 和基础工具
+
+# ============================================================
+# 安装 Java8、Python 3.10 编译依赖和基础工具
+# ============================================================
+
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
     apt-get install -y --no-install-recommends \
         openjdk-8-jdk \
-        python${PYTHON_VERSION} \
-        python3-distutils \
         git \
         curl \
+        wget \
         vim \
         fuse \
+        build-essential \
         libssl1.1 \
         libssl-dev \
-        zlib1g-dev && \
-    update-alternatives \
-        --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 && \
-    update-alternatives \
-        --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
-    curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} && \
+        zlib1g-dev \
+        libffi-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libncursesw5-dev \
+        liblzma-dev \
+        libgdbm-dev \
+        libnss3-dev \
+        uuid-dev \
+        tk-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 
 # ============================================================
-# Python environment
+# 源码安装 Python 3.10.12
+# ============================================================
+
+RUN cd /tmp && \
+    wget -q https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz && \
+    tar -xzf Python-${PYTHON_VERSION}.tgz && \
+    cd Python-${PYTHON_VERSION} && \
+    ./configure --enable-optimizations && \
+    make -j"$(nproc)" && \
+    make altinstall && \
+    ln -sf /usr/local/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/local/bin/python3.10 /usr/bin/python3 && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | /usr/local/bin/python3.10 && \
+    ln -sf /usr/local/bin/pip3.10 /usr/local/bin/pip && \
+    cd / && \
+    rm -rf /tmp/Python-${PYTHON_VERSION}*
+
+
+# ============================================================
+# Python Environment
 # ============================================================
 
 WORKDIR /serving
+
+RUN python --version && \
+    pip --version
 
 RUN pip install --no-cache-dir \
     pyarrow \
@@ -144,7 +172,7 @@ RUN chmod +x build_config_api.sh && \
 
 
 # ============================================================
-# Copy Hadoop and libraries from builder
+# 从 builder 拷贝 Hadoop 和旧版动态库
 # ============================================================
 
 RUN mkdir -p /opt/hadoop-libs
@@ -163,13 +191,14 @@ COPY --from=builder \
 
 
 # ============================================================
-# Hadoop runtime
+# Hadoop Runtime
 # ============================================================
 
 ENV HADOOP_HOME=/opt/hadoop
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
+# Hadoop 2.7.1 native library 需要旧版 libssl/libcrypto
 ENV LD_LIBRARY_PATH=/opt/hadoop-libs:$HADOOP_HOME/lib/native
 
 RUN echo "export JAVA_HOME=${JAVA_HOME}" \
@@ -180,7 +209,20 @@ RUN echo "export JAVA_HOME=${JAVA_HOME}" \
 
 
 # ============================================================
+# 基础环境验证
+# ============================================================
+
+RUN java -version && \
+    python --version && \
+    pip --version && \
+    hadoop version && \
+    test -f /usr/lib/libhdfs.so
+
+
+# ============================================================
 # TensorFlow Serving
 # ============================================================
 
 EXPOSE 8500 8501
+
+# 继承 tensorflow/serving:2.18.0-gpu 原有 ENTRYPOINT / CMD

@@ -33,6 +33,7 @@ RUN apt-get update && \
         automake \
         libtool \
         cmake \
+        pkg-config \
         fuse \
         libfuse-dev \
         zlib1g-dev \

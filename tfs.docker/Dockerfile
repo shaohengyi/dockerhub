@@ -59,7 +59,7 @@ RUN cd /tmp && \
 
 
 # ============================================================
-# Python / Jupyter 环境
+# Python / TensorFlow / Jupyter 环境
 # ============================================================
 
 WORKDIR /serving
@@ -68,6 +68,7 @@ RUN python --version && \
     pip --version
 
 RUN pip install --no-cache-dir \
+    tensorflow==2.18.0 \
     jupyter \
     jupyterlab \
     notebook \
@@ -98,6 +99,8 @@ RUN chmod +x build_config_api.sh && \
 
 RUN python --version && \
     pip --version && \
+    python -c "import tensorflow as tf; print('TensorFlow:', tf.__version__)" && \
+    saved_model_cli --help > /dev/null && \
     jupyter --version && \
     which tini && \
     tensorflow_model_server --version

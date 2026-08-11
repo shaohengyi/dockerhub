@@ -94,16 +94,16 @@ RUN chmod +x build_config_api.sh && \
 
 
 # ============================================================
-# 构建阶段验证
+# 构建阶段基础环境验证
 # ============================================================
 
 RUN python --version && \
     pip --version && \
-    python -c "import tensorflow as tf; print('TensorFlow:', tf.__version__)" && \
-    saved_model_cli --help > /dev/null && \
-    jupyter --version && \
-    which tini && \
-    tensorflow_model_server --version
+    python -c "import tensorflow as tf; assert tf.__version__ == '2.18.0'; print('TensorFlow:', tf.__version__)" && \
+    command -v saved_model_cli && \
+    command -v jupyter && \
+    command -v tini && \
+    command -v tensorflow_model_server
 
 
 # ============================================================

@@ -80,10 +80,10 @@ RUN mvn package -Pdist,native -DskipTests -Dtar
 
 
 # ============================================================
-# Stage 2: TensorFlow Serving 2.18.0 GPU Runtime
+# Stage 2: TensorFlow Serving 2.14.1 GPU Runtime
 # ============================================================
 
-FROM tensorflow/serving:2.18.0-gpu
+FROM tensorflow/serving:2.14.1-gpu
 
 ARG HADOOP_VERSION=2.7.1
 ARG PYTHON_VERSION=3.10.12
@@ -157,7 +157,7 @@ RUN python --version && \
     pip --version
 
 RUN pip install --no-cache-dir \
-    tensorflow==2.18.0 \
+    tensorflow==2.14.1 \
     jupyter \
     jupyterlab \
     notebook \

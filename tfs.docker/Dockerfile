@@ -1,4 +1,12 @@
 # ============================================================
+# Stage 0: CUDA toolkit provider for XLA
+# ============================================================
+
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 AS cuda-devel
+
+
+
+# ============================================================
 # Stage 1: Build Hadoop 2.7.1
 # ============================================================
 
@@ -43,7 +51,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 
-# CMake 查找 JVM
 RUN ln -s \
     $JAVA_HOME/jre/lib/amd64/server/libjvm.so \
     $JAVA_HOME/jre/lib/amd64/libjvm.so
@@ -83,7 +90,6 @@ RUN mkdir -p ${HADOOP_SRC_HOME} && \
 WORKDIR ${HADOOP_SRC_HOME}
 
 
-# 编译 Hadoop native library
 RUN mvn package -Pdist,native -DskipTests -Dtar
 
 
@@ -107,6 +113,24 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 
 USER root
+
+# ============================================================
+# CUDA XLA dependencies
+# ============================================================
+
+COPY --from=cuda-devel \
+    /usr/local/cuda/bin/ptxas \
+    /usr/local/cuda/bin/ptxas
+
+
+COPY --from=cuda-devel \
+    /usr/local/cuda/nvvm/libdevice \
+    /usr/local/cuda/nvvm/libdevice
+
+
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV XLA_FLAGS=--xla_gpu_cuda_data_dir=/usr/local/cuda
 
 
 
@@ -224,12 +248,14 @@ COPY --from=builder \
     /opt/hadoop
 
 
+
 ENV HADOOP_HOME=/opt/hadoop
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
 
 ENV LD_LIBRARY_PATH=/opt/hadoop-libs:$HADOOP_HOME/lib/native
+
 
 
 RUN echo "export JAVA_HOME=${JAVA_HOME}" \
@@ -253,7 +279,9 @@ RUN python --version && \
     command -v saved_model_cli && \
     command -v jupyter && \
     command -v tini && \
-    command -v tensorflow_model_server
+    command -v tensorflow_model_server && \
+    command -v ptxas && \
+    test -f /usr/local/cuda/nvvm/libdevice/libdevice.10.bc
 
 
 
